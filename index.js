@@ -47,19 +47,19 @@ app.use("/api/v1/banner", bannerRoutes);
 app.use("/api/v1/chat", chatRoute);
 // Uncomment this block if you're handling socket.io events
 
-io.on("connection", (socket) => {
-  console.log("user connected");
+// io.on("connection", (socket) => {
+//   console.log("user connected");
 
-  socket.on("send_message", (data) => {
-    const {s_id,r_id,msg} = data
-  SaveMessage(s_id,r_id,msg).then(()=>{
-    socket.emit(`receive_${s_id}_message`,{s_id,r_id,msg})
-  }).catch((err)=>{
-    console.log(err)
-  })
-  });
+//   socket.on("send_message", (data) => {
+//     const {s_id,r_id,msg} = data
+//   SaveMessage(s_id,r_id,msg).then(()=>{
+//     socket.emit(`receive_${s_id}_message`,{s_id,r_id,msg})
+//   }).catch((err)=>{
+//     console.log(err)
+//   })
+//   });
 
-});
+// });
 
 
 
