@@ -1,0 +1,10 @@
+{
+  "updateUser": {
+    "limit": 5,
+    "window": 60000
+  },
+  "verifyUser": {
+    "limit": 3,
+    "window": 60000
+  }
+}
