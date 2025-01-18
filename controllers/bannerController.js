@@ -1,5 +1,5 @@
 const connection = require("../db/db_config");
-
+const { v4: uuidv4 } = require('uuid');
 const cloudinary = require("cloudinary").v2;
 
 cloudinary.config({
@@ -10,6 +10,7 @@ cloudinary.config({
 
 
 const uploadBanner = (req,res)=>{
+  const banner_id = uuidv4();
     const { heading,title,desc,product_id,priority } = req.body;
 
     // First, check if a category with the same name already exists
@@ -50,8 +51,8 @@ const uploadBanner = (req,res)=>{
           .then((url) => {
             // Now insert the category into the database
             connection.query(
-              "INSERT INTO banners (heading,title,banner_desc,product_id,priority,image_url) VALUES (?, ?,?,?,?,?)",
-              [heading,title,desc,product_id,priority,url],
+              "INSERT INTO banners (id,heading,title,banner_desc,product_id,priority,image_url) VALUES (?,?, ?,?,?,?,?)",
+              [banner_id,heading,title,desc,product_id,priority,url],
               (error, result) => {
                 if (error) {
                   return connection.rollback(() => {

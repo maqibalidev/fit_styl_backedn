@@ -1,5 +1,6 @@
 const connection = require("../db/db_config");
 const cloudinary = require("cloudinary").v2;
+const { v4: uuidv4 } = require('uuid');
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -8,6 +9,8 @@ cloudinary.config({
   });
   
   const uploadProduct = async (req, res) => {
+    const product_id = uuidv4();
+    const image_id = uuidv4();
     const {
       name, desc, price, off_sale, rating, priority, fabric_type,
       colors, size, returnable, shop_id, margin, category_id
@@ -31,8 +34,8 @@ cloudinary.config({
           }
   
           connection.query(
-            "INSERT INTO products (`name`, `product_desc`, `price`, `off_sale`, `rating`, `priority`, `fabric_type`, `colors`, `size`, `returnable`, `shop_id`, `margin`, `category_id`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [name, desc, price, off_sale, rating, priority, fabric_type, colors, size, returnable, shop_id, margin, category_id],
+            "INSERT INTO products (`id`,`name`, `product_desc`, `price`, `off_sale`, `rating`, `priority`, `fabric_type`, `colors`, `size`, `returnable`, `shop_id`, `margin`, `category_id`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [product_id,name, desc, price, off_sale, rating, priority, fabric_type, colors, size, returnable, shop_id, margin, category_id],
             (error, result) => {
               if (error) {
                 return connection.rollback(() => {
@@ -40,7 +43,7 @@ cloudinary.config({
                 });
               }
   
-              const productId = result.insertId;
+             
   
               const imageInsertPromises = req.files.map((file) => {
                 return new Promise((resolve, reject) => {
@@ -53,8 +56,8 @@ cloudinary.config({
   
                       const imageUrl = result.secure_url;
                       connection.query(
-                        "INSERT INTO images (product_id, img_url) VALUES (?, ?)",
-                        [productId, imageUrl],
+                        "INSERT INTO images (id,product_id, img_url) VALUES (?,?, ?)",
+                        [image_id,product_id, imageUrl],
                         (err, data) => {
                           if (err) {
                             return reject(err);

@@ -1,6 +1,6 @@
 const connection = require("../db/db_config");
 const cloudinary = require("cloudinary").v2;
-
+const { v4: uuidv4 } = require('uuid');
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -10,6 +10,7 @@ cloudinary.config({
 // Upload category function with check for existing category
 const uploadCategory = (req, res) => {
   const { name } = req.body;
+  const category_id = uuidv4();
 
   // First, check if a category with the same name already exists
   connection.query("SELECT * FROM categories WHERE name = ?", [name], (error, results) => {
@@ -50,8 +51,8 @@ const uploadCategory = (req, res) => {
         .then((url) => {
           // Now insert the category into the database
           connection.query(
-            "INSERT INTO categories (name, icon_url) VALUES (?, ?)",
-            [name, url],
+            "INSERT INTO categories (id,name, icon_url) VALUES (?,?, ?)",
+            [category_id,name, url],
             (error, result) => {
               if (error) {
                 // If error, rollback the transaction

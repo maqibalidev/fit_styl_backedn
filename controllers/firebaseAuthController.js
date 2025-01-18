@@ -1,10 +1,11 @@
 const admin = require('firebase-admin'); // Firebase Admin SDK (ensure it's initialized)
 const { checkUserExistence, generateToken } = require('../helpers/authHelpers');
 const connection = require('../db/db_config');
+const { v4: uuidv4 } = require('uuid');
 
 const registerUserWithGoogle = async (req, res) => {
     const { token, name } = req.body;
-  
+    const userId = uuidv4();
     try {
       // Step 1: Verify Firebase ID Token
       const decodedToken = await admin.auth().verifyIdToken(token);
@@ -44,10 +45,11 @@ const registerUserWithGoogle = async (req, res) => {
         };
   
         const query =
-          "INSERT INTO users (username, email, password, created_at, type) VALUES (?, ?, ?, ?, ?)";
+          "INSERT INTO users (id,username, email, password, created_at, type) VALUES (?,?, ?, ?, ?, ?)";
         connection.query(
           query,
           [
+            userId,
             newUser.username,
             newUser.email,
             newUser.password,

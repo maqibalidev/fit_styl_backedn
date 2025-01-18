@@ -1,10 +1,11 @@
 const connection = require("../db/db_config");
+const { v4: uuidv4 } = require('uuid');
 
  const SaveMessage = (s_id,r_id,msg) => new Promise((resolve,reject)=>{
-
+  const uniqueID = uuidv4();
     const query =
-    "INSERT INTO chats (sender_id, receiver_id, message) VALUES (?, ?, ?)";
-  connection.query(query, [s_id, r_id, msg], (err, result) => {
+    "INSERT INTO chats (id,sender_id, receiver_id, message) VALUES (?,?, ?, ?)";
+  connection.query(query, [uniqueID,s_id, r_id, msg], (err, result) => {
     if (err) {
         reject({ message: "Error saving user", error: err })
     }

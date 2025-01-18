@@ -2,6 +2,7 @@ const connection = require("../db/db_config");
 const nodemailer = require('nodemailer');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
+const { v4: uuidv4 } = require('uuid');
 const {
   checkUserExistence,
   hashPassword,
@@ -12,6 +13,7 @@ const {
 
 // Register new user
 const registerUser = async (req, res) => {
+  const uniqueID = uuidv4();
   const { username, email, password } = req.body;
 
   // Step 1: Check if user already exists
@@ -38,10 +40,11 @@ const registerUser = async (req, res) => {
 
         // Step 3: Insert user into database
         const query =
-          "INSERT INTO users (username, email, password,created_at,type) VALUES (?, ?, ?,?,?)";
+          "INSERT INTO users (id,username, email, password,created_at,type) VALUES (?,?, ?, ?,?,?)";
         connection.query(
           query,
           [
+            uniqueID,
             newUser.username,     // username
             newUser.email,        // email
             newUser.password,     // hashedPassword
