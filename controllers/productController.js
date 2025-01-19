@@ -154,6 +154,7 @@ cloudinary.config({
     query += " LIMIT $4 OFFSET $5";
     queryParams.push(parseInt(limit), parseInt(offset));
   
+    // Execute the query
     connection.query(query, queryParams, (error, results) => {
       if (error) {
         return res.status(500).json({ message: "Error fetching products", error: error.message });
@@ -179,6 +180,7 @@ cloudinary.config({
       });
     });
   };
+  
   
   
   
