@@ -7,51 +7,26 @@ if (!process.env.HOST || !process.env.USER || !process.env.DATABASE) {
   );
 }
 
-// CREATING CONNECTION POOL
+// CREATING CONNECTION
 
-const pool = mysql.createPool({
+const connection = mysql.createConnection({
   host: process.env.HOST,
   user: process.env.USER,
-  password: process.env.PASSWORD || "", // Provide default empty string for password if not set
+  password: process.env.PASSWORD || "",
   database: process.env.DATABASE,
-  connectionLimit: 10, // maximum number of connections to create in the pool
-  waitForConnections: true, // when the pool is exhausted, it will queue the connections until one becomes available
-  queueLimit: 0, // unlimited queue length (can be adjusted as needed)
-  connectTimeout: 10000, // Timeout for establishing a connection
-  acquireTimeout: 10000, // Timeout for acquiring a connection from the pool
-  timeout: 30000, // Timeout for idle connections before they are closed
+  
 });
 
 // HANDLING ERRORS ON CONNECTION TO DATABASE
 
-// Get a connection from the pool to test if everything is working fine
-pool.getConnection((err, connection) => {
+connection.connect((err) => {
   if (err) {
     console.error("Failed to connect to the database:");
     console.error(err.message);
-
-    // Gracefully shut down if unable to connect
     process.exit(1);
   } else {
     console.log("Successfully connected to the database.");
-
-    // Release the connection back to the pool
-    connection.release();
   }
 });
 
-// GRACEFUL SHUTDOWN HANDLING (For when the app is terminated)
-
-process.on("SIGINT", () => {
-  console.log("Shutting down gracefully...");
-  pool.end((err) => {
-    if (err) {
-      console.error("Error closing database pool:", err.message);
-    } else {
-      console.log("Database pool closed.");
-    }
-    process.exit();
-  });
-});
-
-module.exports = pool;
+module.exports = connection;
