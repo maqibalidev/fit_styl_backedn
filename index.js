@@ -37,7 +37,7 @@ app.use(express.urlencoded({ extended: true }));
 // Create Socket.IO server with CORS configuration
 const io = new Server(server, {
   cors: {
-    origin: ["https://fit-styl-project.vercel.app", "http://localhost:3000"], // Allow frontend domains (Vercel + localhost)
+    origin: ["https://fit-styl.vercel.app", "http://localhost:3000"], // Allow frontend domains (Vercel + localhost)
     methods: ["GET", "POST"], // Specify allowed WebSocket methods
     credentials: true, // Allow credentials (cookies, auth headers)
   },
