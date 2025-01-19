@@ -102,7 +102,6 @@ cloudinary.config({
   const getProducts = (req, res) => {
     const { cat, limit = 10, offset = 0, id, priority } = req.query;
   
-    // Updated query with category name, priority, and price calculation
     let query = `
       SELECT 
         products.id,
@@ -118,7 +117,7 @@ cloudinary.config({
         products.size,
         products.category_id,
         categories.name AS category_name,
-        GROUP_CONCAT(images.img_url) AS images,
+        STRING_AGG(images.img_url, ',') AS images,
         -- Calculate the price after margin and ensure it's an integer (rounded down)
         FLOOR(products.price + (products.price * products.margin / 100)) AS price_with_margin,
         -- Calculate the final price after margin and off_sale, ensuring it's an integer (rounded down)
@@ -126,53 +125,47 @@ cloudinary.config({
             - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price
       FROM products
       LEFT JOIN images ON products.id = images.product_id
-      LEFT JOIN categories ON products.category_id = categories.id  -- Join categories table
+      LEFT JOIN categories ON products.category_id = categories.id
     `;
-    
+  
     let queryParams = [];
   
     // Add WHERE clause based on query parameters
     if (id) {
-      query += " WHERE products.id = ?";
+      query += " WHERE products.id = $1";
       queryParams.push(id);
     } else {
-      // Add condition for category if provided
       if (cat) {
-        query += " WHERE products.category_id = ?";
+        query += " WHERE products.category_id = $2";
         queryParams.push(cat);
       }
   
-      // Add condition for priority if provided
       if (priority) {
-        // If there's already a WHERE condition (because of category or id), use AND
         if (queryParams.length > 0) {
-          query += " AND products.priority = ?";
+          query += " AND products.priority = $3";
         } else {
-          query += " WHERE products.priority = ?";
+          query += " WHERE products.priority = $3";
         }
         queryParams.push(priority);
       }
     }
   
-    // Add GROUP BY and pagination
-    query += " GROUP BY products.id";
-    if (!id) {
-      query += " LIMIT ? OFFSET ?";
-      queryParams.push(parseInt(limit), parseInt(offset));
-    }
+    query += " GROUP BY products.id, categories.name";
   
-    // Execute query
+    // Add pagination logic with proper SQL syntax for PostgreSQL
+    query += " LIMIT $4 OFFSET $5";
+    queryParams.push(parseInt(limit), parseInt(offset));
+  
     connection.query(query, queryParams, (error, results) => {
       if (error) {
         return res.status(500).json({ message: "Error fetching products", error: error.message });
       }
   
-      if (results.length === 0) {
+      if (results.rows.length === 0) {
         return res.status(404).json({ message: `No ${id ? "product" : "products"} found` });
       }
   
-      // Format results to include computed prices and category name
-      const formattedResults = results.map(product => {
+      const formattedResults = results.rows.map(product => {
         const { images, price_with_margin, final_price, category_name, ...others } = product;
         return {
           ...others,
