@@ -1,52 +1,43 @@
-const mysql = require('mysql');
+const { Pool } = require('pg');
 
 // Validate environment variables to catch configuration issues early
-if (!process.env.HOST || !process.env.USER || !process.env.DATABASE) {
+if (!process.env.HOST || !process.env.USER || !process.env.DATABASE || !process.env.PASSWORD) {
   throw new Error(
-    "Missing database configuration in environment variables. Please check HOST, USER, and DATABASE."
+    "Missing database configuration in environment variables. Please check HOST, USER, PASSWORD, and DATABASE."
   );
 }
 
-// Function to handle MySQL connection
-const createConnection = () => {
-  const connection = mysql.createConnection({
-    connectionLimit: 10, // Max number of connections in the pool
-    host: process.env.HOST,
-    user: process.env.USER,
-    password: process.env.PASSWORD || "",
-    database: process.env.DATABASE,
+// Function to create a connection pool for PostgreSQL
+const createPool = () => {
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 10, // Maximum number of connections in the pool
   });
 
-  // Connect to the database
-  connection.connect((err) => {
-    if (err) {
-      console.error("Failed to connect to the database:");
+  // Test the connection
+  pool
+    .connect()
+    .then((client) => {
+      console.log("Successfully connected to the PostgreSQL database.");
+      client.release(); // Release the client back to the pool
+    })
+    .catch((err) => {
+      console.error("Failed to connect to the PostgreSQL database:");
       console.error(err.message);
       process.exit(1); // Exit the process if initial connection fails
-    } else {
-      console.log("Successfully connected to the database.");
-    }
+    });
+
+  // Handle errors on the pool
+  pool.on('error', (err) => {
+    console.error('Unexpected error on PostgreSQL client:', err.message);
+    process.exit(1); // Exit the process on unexpected errors
   });
 
-  // Handle MySQL errors such as connection loss or disconnections
-  connection.on('error', (err) => {
-    console.error('Database error occurred:', err.message);
-    if (err.code === 'PROTOCOL_CONNECTION_LOST') {
-      // The connection was lost (e.g., server restart)
-      console.log("Reconnecting to the database...");
-      createConnection(); // Reconnect to the database
-    } else {
-      // Other errors, log and exit the process
-      console.error("Critical database error. Shutting down...");
-      process.exit(1);
-    }
-  });
-
-  return connection;
+  return pool;
 };
 
-// Create initial connection
-let connection = createConnection();
+// Create connection pool
+const pool = createPool();
 
-// Export connection object
-module.exports = connection;
+// Export pool object for querying
+module.exports = pool;
