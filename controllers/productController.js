@@ -134,15 +134,17 @@ cloudinary.config({
       queryParams.push(id);
     } else {
       if (cat) {
-        query += " WHERE products.category_id = $2::int";  // Cast 'cat' to integer (if it's an integer column)
+        // Explicitly cast 'cat' to integer, assuming 'category_id' is an integer
+        query += " WHERE products.category_id = $2::int"; 
         queryParams.push(cat);
       }
   
       if (priority) {
+        // Explicitly cast 'priority' to integer, assuming 'priority' is an integer
         if (queryParams.length > 0) {
-          query += " AND products.priority = $3::int";  // Cast 'priority' to integer (if it's an integer column)
+          query += " AND products.priority = $3::int"; 
         } else {
-          query += " WHERE products.priority = $3::int";  // Cast 'priority' to integer
+          query += " WHERE products.priority = $3::int"; 
         }
         queryParams.push(priority);
       }
