@@ -25,7 +25,7 @@ const server = http.createServer(app);
 
 // Configure CORS middleware for HTTP requests
 const corsOptions = {
-  origin: ["https://fit-styl-project.vercel.app", "http://localhost:3000"], // Allow frontend domains (Vercel + localhost)
+  origin: ["https://fit-styl.vercel.app", "http://localhost:3000"], // Allow frontend domains (Vercel + localhost)
   methods: ["GET", "POST"], // Specify allowed HTTP methods
   credentials: true, // Allow credentials (cookies, auth headers)
 };
