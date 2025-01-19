@@ -10,6 +10,7 @@ if (!process.env.HOST || !process.env.USER || !process.env.DATABASE) {
 // Function to handle MySQL connection
 const createConnection = () => {
   const connection = mysql.createConnection({
+    connectionLimit: 10, // Max number of connections in the pool
     host: process.env.HOST,
     user: process.env.USER,
     password: process.env.PASSWORD || "",
