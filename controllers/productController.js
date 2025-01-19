@@ -118,9 +118,7 @@ cloudinary.config({
         products.category_id,
         categories.name AS category_name,
         STRING_AGG(images.img_url, ',') AS images,
-        -- Calculate the price after margin and ensure it's an integer (rounded down)
         FLOOR(products.price + (products.price * products.margin / 100)) AS price_with_margin,
-        -- Calculate the final price after margin and off_sale, ensuring it's an integer (rounded down)
         FLOOR((products.price + (products.price * products.margin / 100)) 
             - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price
       FROM products
@@ -132,19 +130,19 @@ cloudinary.config({
   
     // Add WHERE clause based on query parameters
     if (id) {
-      query += " WHERE products.id = $1";
+      query += " WHERE products.id = $1";  // Assuming 'id' is UUID or string
       queryParams.push(id);
     } else {
       if (cat) {
-        query += " WHERE products.category_id = $2";
+        query += " WHERE products.category_id = $2::int";  // Cast 'cat' to integer (if it's an integer column)
         queryParams.push(cat);
       }
   
       if (priority) {
         if (queryParams.length > 0) {
-          query += " AND products.priority = $3";
+          query += " AND products.priority = $3::int";  // Cast 'priority' to integer (if it's an integer column)
         } else {
-          query += " WHERE products.priority = $3";
+          query += " WHERE products.priority = $3::int";  // Cast 'priority' to integer
         }
         queryParams.push(priority);
       }
