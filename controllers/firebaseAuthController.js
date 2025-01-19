@@ -24,14 +24,14 @@ const registerUserWithGoogle = async (req, res) => {
           return res.status(500).json({ message: "Internal server error", error: err });
         }
   
-        if (data.length > 0) {
-          const user = data[0];
+        if (data?.rows?.length > 0) {
+          const user = data.rows[0];
           const token = generateToken(user.id);
   
           return res.status(200).json({
             message: "Login successful",
             token: token,
-            user: { id: user.user_id, username: user.username ,email:user.email },
+            user: { id: user.id, username: user.username ,email:user.email },
           });
         }
   
@@ -40,32 +40,33 @@ const registerUserWithGoogle = async (req, res) => {
           username: userName,
           email,
           password: null, // No password needed for Firebase users
-          created_at: Math.floor(Date.now() / 1000),
+          created_at: Math.floor(Date.now()),
           type: 1, // Different type for Firebase users
         };
   
         const query =
-          "INSERT INTO users (id,username, email, password, created_at, type) VALUES (?,?, ?, ?, ?, ?)";
-        connection.query(
-          query,
-          [
+          "INSERT INTO users (id,username, email, password, created_at, type) VALUES ($1 , $2 , $3 , $4 , $5, $6) RETURNING id;";
+          const values = [
             userId,
             newUser.username,
             newUser.email,
             newUser.password,
             newUser.created_at,
             newUser.type,
-          ],
+          ]
+        connection.query(
+          query,
+          values,
           (err, result) => {
             if (err) {
               return res.status(500).json({ message: "Error saving user", error: err });
             }
-            const token = generateToken(result.insertId);
+            const token = generateToken(result.rows[0].id);
   
             return res.status(200).json({
               message: "User Registered successfully!",
               token: token,
-              user: { id: result.insertId, username: userName,email:newUser.email },
+              user: { id: result.rows[0].id, username: userName,email:newUser.email },
             });
           }
         );
@@ -97,12 +98,12 @@ const registerUserWithGoogle = async (req, res) => {
             .json({ message: "Internal server error", error: err });
         }
   
-        if (data.length === 0) {
+        if (data?.rows?.length === 0) {
           return res.status(400).json({ message: "User does not exist." });
         }
   
-        const user = data[0];
-        const token = generateToken(user.user_id);
+        const user = data.rows[0];
+        const token = generateToken(user.id);
   
         return res.status(200).json({
           message: "Login successful",

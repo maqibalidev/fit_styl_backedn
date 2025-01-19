@@ -9,11 +9,11 @@ const checkUserExistence = (username = null, email, callback) => {
   
    
     if (username) {
-      query = "SELECT * FROM users WHERE username = ? OR email = ?";
+      query = "SELECT * FROM users WHERE username = $1 OR email = $2;";
       params = [username, email];
     } else {
     
-      query = "SELECT * FROM users WHERE email = ?";
+      query = "SELECT * FROM users WHERE email = $1;";
       params = [email];
     }
   

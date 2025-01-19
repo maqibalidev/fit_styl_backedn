@@ -13,65 +13,42 @@ const {
 
 // Register new user
 const registerUser = async (req, res) => {
-  const uniqueID = uuidv4();
   const { username, email, password } = req.body;
-
-  // Step 1: Check if user already exists
-  checkUserExistence(username,email, (err, data) => {
-    if (err) {
-      return res
-        .status(500)
-        .json({ message: "Internal server error", error: err });
-    }
-    if (data.length > 0) {
-      return res.status(400).json({ message: "user already exists!" });
+  const uniqueID = uuidv4();
+  try {
+    // Step 1: Check if user already exists
+    const existingUser = await checkUserExistence(username, email); 
+ 
+    if (existingUser?.rows?.length > 0) {
+      return res.status(400).json({ message: "User already exists!" });
     }
 
     // Step 2: Hash the password
-    hashPassword(password)
-      .then((hashedPassword) => {
-        const newUser = {
-          username,
-          email,
-          password: hashedPassword,
-          created_at: Math.floor(Date.now() / 1000),
-          type: 0,
-        };
+    const hashedPassword = await hashPassword(password); 
 
-        // Step 3: Insert user into database
-        const query =
-          "INSERT INTO users (id,username, email, password,created_at,type) VALUES (?,?, ?, ?,?,?)";
-        connection.query(
-          query,
-          [
-            uniqueID,
-            newUser.username,     // username
-            newUser.email,        // email
-            newUser.password,     // hashedPassword
-            newUser.created_at,   // created_at (timestamp in seconds)
-            newUser.type          // type
-          ],
-          (err, result) => {
-            if (err) {
-              return res
-                .status(500)
-                .json({ message: "Error saving user", error: err });
-            }
-            return res
-              .status(201)
-              .json({
-                message: "User registered successfully"
-              });
-          }
-        );
-      })
-      .catch((err) => {
-        return res
-          .status(500)
-          .json({ message: "Error hashing password", error: err });
-      });
-  });
+    // Step 3: Insert user into database and retrieve the id
+    const query = `
+      INSERT INTO users (id,username, email, password, created_at, type)
+      VALUES ($1, $2, $3, $4, $5,$6) RETURNING id;
+    `;
+    const timestamp = Math.floor(Date.now());
+const values = [uniqueID,username,email,hashedPassword,timestamp, 0];
+    const result = await connection.query(query, values);
+
+    const newUserId = result.rows[0].id;
+
+    return res.status(201).json({
+      message: "User registered successfully",
+      id: newUserId,
+    });
+
+  } catch (err) {
+    console.error("Error registering user:", err); 
+    return res.status(500).json({ message: "Internal server error", error: err });
+  }
 };
+
+
 
 // Login user
 const loginUser = (req, res) => {
@@ -84,12 +61,12 @@ const loginUser = (req, res) => {
         .status(500)
         .json({ message: "Internal server error", error: err });
     }
-    if (data.length === 0) {
+    if (data?.rows?.length === 0) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
     // Step 2: Compare the password
-    const user = data[0];
+    const user = data.rows[0];
     comparePassword(password, user.password)
       .then((isMatch) => {
         if (!isMatch) {
@@ -118,48 +95,50 @@ const getUser = (req, res) => {
   const id =  req.user.userId; // From JWT middleware
 
   // Step 1: Query the database for the user data
-  const query = "SELECT * FROM users WHERE id = ?";
-  connection.query(query, [id], (err, data) => {
+  const query = "SELECT * FROM users WHERE id = $1;";
+  const values = [id];
+  connection.query(query, values, (err, data) => {
     if (err) {
       return res
         .status(500)
         .json({ message: "Internal server error", error: err });
     }
 
-    if (data.length === 0) {
+    if (data?.rows?.length === 0) {
       return res.status(404).json({ message: "User not found" });
     }
 
     // Step 2: Send the user profile data
     res.status(200).json({
       user: {
-        username: data[0].username,
-        email: data[0].email,
-        address: data[0].address,
-        is_verified:data[0].is_verified
+        username: data.rows[0].username,
+        email: data.rows[0].email,
+        address: data.rows[0].address,
+        is_verified:data.rows[0].is_verified
       },
     });
   });
 };
 
 const getAllUser = (req, res) => {
-  const userId = req.user.userId;
+  
 
-  const query = "SELECT * FROM users WHERE user_id != ?";
-  connection.query(query, [userId], (err, data) => {
+  const query = "SELECT * FROM users;";
+
+  connection.query(query, (err, data) => {
     if (err) {
       return res
         .status(500)
         .json({ message: "Internal server error", error: err });
     }
 
-    if (data.length === 0) {
+    if (data?.rows?.length === 0) {
       return res.status(404).json({ message: "Users not found" });
     }
 
    
     res.status(200).json({
-      data,
+      data: data.rows
     });
   });
 };
@@ -182,12 +161,12 @@ const forgotPassword = async (req, res) => {
         .json({ message: "Internal server error", error: err });
     }
 
-    if (data.length === 0) {
+    if (data?.rows?.length === 0) {
       return res.status(404).json({ message: `User with this email doesn't exist` });
     }
 
     // Step 2: Generate a JWT reset token (expires in 1 hour)
-    const user = data[0];
+    const user = data.rows[0];
    
     const resetToken = jwt.sign({email : user.email }, process.env.JWT_SECRET, {
       expiresIn: "1h",
@@ -271,7 +250,7 @@ const resetPassword = async (req, res) => {
         .json({ message: "Internal server error", error: err });
     }
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount  === 0) {
       return res
         .status(404)
         .json({ message: `No user found` });
@@ -301,7 +280,7 @@ console.log(error)
 
 
 const updateUserPassword = (email, hashedPassword, callback) => {
-  const sql = "UPDATE users SET password = ? WHERE email = ?";
+  const sql = "UPDATE users SET password = $1 WHERE email = $2;";
   const values = [hashedPassword, email];
 
   connection.query(sql, values, (err, result) => {
@@ -319,18 +298,19 @@ const updateUser = async (req, res) => {
   const { currentPassword, newPassword, username, address } = req.body;
 
   try {
-    const query = "SELECT * FROM users WHERE id = ?";
-    connection.query(query, [user_id], async (err, results) => {
+    const query = "SELECT * FROM users WHERE id = $1";
+    const values = [user_id]
+    connection.query(query, values, async (err, results) => {
       if (err) {
         console.error("Database error:", err);
         return res.status(500).json({ message: "Internal server error.", error: err });
       }
 
-      if (results.length === 0) {
+      if (results?.rows?.length === 0) {
         return res.status(404).json({ message: "User not found." });
       }
 
-      const user = results[0]; // User record from the database
+      const user = results.rows[0]; // User record from the database
       let hashedPassword = user.password;
 
       // Step 2: If a password update is requested, validate the current password
@@ -347,9 +327,8 @@ const updateUser = async (req, res) => {
       // Step 3: Update user fields (username, address, and optionally password)
       const updateQuery = `
         UPDATE users 
-        SET username = ?, address = ?, password = ? 
-        WHERE id = ?
-      `;
+        SET username = $1, address = $2, password = $3 
+        WHERE id = $4;`;
       const updateValues = [
         username || user.username,
         address || user.address,
@@ -390,14 +369,14 @@ const verifyUser = (req,res)=>{
         .json({ message: "Internal server error", error: err });
     }
 
-    if (data.length === 0) {
+    if (data?.rows?.length === 0) {
       return res.status(404).json({ message: `User with this email doesn't exist` });
     }
-   else if (data[0].is_verified === 1) {
+   else if (data.rows[0].is_verified === 1) {
       return res.status(404).json({ message: `Account already verified!` });
     }
     // Step 2: Generate a JWT reset token (expires in 1 hour)
-    const user = data[0];
+    const user = data.rows[0];
    
     const resetToken = jwt.sign({email : user.email }, process.env.JWT_SECRET, {
       expiresIn: "1m",
@@ -477,7 +456,7 @@ const verify = (req,res)=>{
         .json({ message: "Internal server error", error: err });
     }
 
-    if (result.affectedRows === 0) {
+    if (result.rowCount  === 0) {
       return res
         .status(404)
         .json({ message: `No user found` });
@@ -499,7 +478,7 @@ const verify = (req,res)=>{
   }
 }
 const updateAccountVerification = (email, callback) => {
-  const sql = "UPDATE users SET is_verified = ? WHERE email = ?";
+  const sql = "UPDATE users SET is_verified = $1 WHERE email = $2;";
   const values = [1, email];
 
   connection.query(sql, values, (err, result) => {

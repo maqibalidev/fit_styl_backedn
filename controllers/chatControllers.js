@@ -19,13 +19,14 @@ const connection = require("../db/db_config");
 const getAllChats = (req, res) => {
   const {s_id} = req.query;
   const query =
-    "SELECT * FROM chats where sender_id = ?  OR receiver_id = ? ORDER BY timestamp";
-  connection.query(query, [s_id,s_id], (err, result) => {
+    "SELECT * FROM chats where sender_id = $1  OR receiver_id = $2 ORDER BY timestamp;";
+    const values = [s_id,s_id];
+  connection.query(query, values, (err, result) => {
     if (err) {
       return res.status(500).json({ message: "Error saving user", error: err });
     }
     return res.status(200).json({
-      data: result
+      data: result.rows
     });
   });
 };

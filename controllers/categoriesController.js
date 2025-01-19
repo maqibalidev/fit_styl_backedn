@@ -8,22 +8,23 @@ cloudinary.config({
 });
 
 // Upload category function with check for existing category
-const uploadCategory = (req, res) => {
+const uploadCategory = async (req, res) => {
   const { name } = req.body;
   const category_id = uuidv4();
 
-  // First, check if a category with the same name already exists
-  connection.query("SELECT * FROM categories WHERE name = ?", [name], (error, results) => {
-    if (error) {
-      return res.status(500).json({ message: "Error checking category existence", error: error.message });
-    }
+  // Start a database client for transactions
+  const client = await connection.connect();
 
-    // If a category with the same name exists, return an error response
-    if (results.length > 0) {
+  try {
+    // Check if a category with the same name already exists
+    const values = [name];
+    const categoryCheck = await client.query("SELECT * FROM categories WHERE name = $1;", values);
+
+    if (categoryCheck.rows.length > 0) {
       return res.status(400).json({ message: "Category with this name already exists" });
     }
 
-    // If category does not exist, proceed with image upload and category insertion
+    // Upload the image to Cloudinary
     const imageInsertPromise = new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { folder: "category_images" },
@@ -31,78 +32,60 @@ const uploadCategory = (req, res) => {
           if (error) {
             return reject(error);
           }
-
           const imageUrl = result.secure_url;
-          resolve(imageUrl); // Resolve with the image URL
+          resolve(imageUrl);
         }
       );
-
-      uploadStream.end(req.files[0].buffer); // End the stream with the file buffer
+      uploadStream.end(req.files[0].buffer); // Send the image buffer to Cloudinary
     });
 
-    // Start transaction
-    connection.beginTransaction((err) => {
-      if (err) {
-        return res.status(500).json({ message: "Failed to start transaction", error: err.message });
-      }
+    // Begin a transaction
+    await client.query("BEGIN");
 
-      // Upload the image and insert category details
-      imageInsertPromise
-        .then((url) => {
-          // Now insert the category into the database
-          connection.query(
-            "INSERT INTO categories (id,name, icon_url) VALUES (?,?, ?)",
-            [category_id,name, url],
-            (error, result) => {
-              if (error) {
-                // If error, rollback the transaction
-                return connection.rollback(() => {
-                  res.status(500).json({ message: "Error inserting category", error: error.message });
-                });
-              }
+    const imageUrl = await imageInsertPromise;
 
-              // Commit the transaction if everything is successful
-              connection.commit((err) => {
-                if (err) {
-                  return connection.rollback(() => {
-                    res.status(500).json({ message: "Transaction commit failed", error: err.message });
-                  });
-                }
+    // Insert the category into the database
+    const insertValues = [category_id, name, imageUrl];
+    const insertQuery = `
+      INSERT INTO categories (id, name, icon_url)
+      VALUES ($1, $2, $3) RETURNING id;
+    `;
+    const insertResult = await client.query(insertQuery, insertValues);
 
-                res.status(201).json({
-                  message: "Category added successfully",
-                  category_id: result.insert_id,
-                });
-              });
-            }
-          );
-        })
-        .catch((error) => {
-          // Rollback transaction if image upload failed
-          connection.rollback(() => {
-            res.status(500).json({ message: "Error saving image", error: error.message });
-          });
-        });
+    // Commit the transaction
+    await client.query("COMMIT");
+
+    res.status(201).json({
+      message: "Category added successfully",
+      category_id: insertResult.rows[0].id,
     });
-  });
+  } catch (error) {
+    // Rollback the transaction in case of an error
+    await client.query("ROLLBACK");
+    res.status(500).json({ message: "Error uploading category", error: error.message });
+  } finally {
+    // Release the client back to the pool
+    client.release();
+  }
 };
+
 
 // Get all categories function
 const getCategories = (req, res) => {
-  connection.query("SELECT * FROM categories", (error, results) => {
+  connection.query("SELECT * FROM categories;", (error, results) => {
     if (error) {
       return res.status(500).json({ message: "Error fetching categories", error: error.message });
     }
 
     // If no categories are found
-    if (results.length === 0) {
+    if (results?.rows?.length === 0) {
       return res.status(404).json({ message: "No categories found" });
     }
 
     // Return the categories with their names and icon URLs
     res.status(200).json({
       message: "Categories fetched successfully",
-      data: results, // The category data will include the name and icon_url
+      data: results.rows, // The category data will include the name and icon_url
     });
   });
 };

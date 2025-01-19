@@ -8,180 +8,173 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
   
+  
   const uploadProduct = async (req, res) => {
     const product_id = uuidv4();
-    const image_id = uuidv4();
     const {
       name, desc, price, off_sale, rating, priority, fabric_type,
-      colors, size, returnable, shop_id, margin, category_id
+      colors, size, returnable, shop_id, margin, category_id,
     } = req.body;
   
-    connection.query(
-      "SELECT * FROM products WHERE name = ?",
-      [name],
-      (err, result) => {
-        if (err) {
-          return res.status(500).json({ message: "Error checking product existence", error: err.message });
-        }
+    // Get a connection to the database
+    const client = await connection.connect();
   
-        if (result.length > 0) {
-          return res.status(400).json({ message: "Product with this name already exists" });
-        }
+    try {
+      // Start the transaction
+      await client.query("BEGIN");
   
-        connection.beginTransaction((err) => {
-          if (err) {
-            return res.status(500).json({ message: "Failed to start transaction", error: err.message });
-          }
+      // Check if a product with the same name already exists
+      const checkProductQuery = "SELECT * FROM products WHERE name = $1;";
+      const checkProductResult = await client.query(checkProductQuery, [name]);
   
-          connection.query(
-            "INSERT INTO products (`id`,`name`, `product_desc`, `price`, `off_sale`, `rating`, `priority`, `fabric_type`, `colors`, `size`, `returnable`, `shop_id`, `margin`, `category_id`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [product_id,name, desc, price, off_sale, rating, priority, fabric_type, colors, size, returnable, shop_id, margin, category_id],
+      if (checkProductResult.rows.length > 0) {
+        throw new Error("Product with this name already exists");
+      }
+  
+      // Insert the product into the database
+      const insertProductQuery = `
+        INSERT INTO products (
+          id, name, product_desc, price, off_sale, rating, priority,
+          fabric_type, colors, size, returnable, shop_id, margin, category_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+      `;
+      const productValues = [
+        product_id, name, desc, price, off_sale, rating, priority,
+        fabric_type, colors, size, returnable, shop_id, margin, category_id,
+      ];
+      await client.query(insertProductQuery, productValues);
+  
+      // Upload images to Cloudinary and insert their URLs into the database
+      const imageInsertPromises = req.files.map(async (file) => {
+        const uploadStream = new Promise((resolve, reject) => {
+          cloudinary.uploader.upload_stream(
+            { folder: "product_images" },
             (error, result) => {
               if (error) {
-                return connection.rollback(() => {
-                  res.status(500).json({ message: "Error saving product", error: error.message });
-                });
+                reject(error);
+              } else {
+                resolve(result.secure_url);
               }
-  
-             
-  
-              const imageInsertPromises = req.files.map((file) => {
-                return new Promise((resolve, reject) => {
-                  const uploadStream = cloudinary.uploader.upload_stream(
-                    { folder: "product_images" },
-                    (error, result) => {
-                      if (error) {
-                        return reject(error);
-                      }
-  
-                      const imageUrl = result.secure_url;
-                      connection.query(
-                        "INSERT INTO images (id,product_id, img_url) VALUES (?,?, ?)",
-                        [image_id,product_id, imageUrl],
-                        (err, data) => {
-                          if (err) {
-                            return reject(err);
-                          }
-                          resolve(data);
-                        }
-                      );
-                    }
-                  );
-  
-                  uploadStream.end(file.buffer);
-                });
-              });
-  
-              Promise.all(imageInsertPromises)
-                .then(() => {
-                  connection.commit((err) => {
-                    if (err) {
-                      return connection.rollback(() => {
-                        res.status(500).json({ message: "Transaction commit failed", error: err.message });
-                      });
-                    }
-  
-                    res.status(201).json({
-                      message: "Product and images uploaded successfully",
-                      product_id: productId,
-                    });
-                  });
-                })
-                .catch((error) => {
-                  connection.rollback(() => {
-                    res.status(500).json({ message: "Error saving images", error: error.message });
-                  });
-                });
             }
-          );
+          ).end(file.buffer);
         });
-      }
-    );
+  
+        const imageUrl = await uploadStream;
+        const image_id = uuidv4();
+        const insertImageQuery = "INSERT INTO images (id, product_id, img_url) VALUES ($1, $2, $3);";
+        const imageValues = [image_id, product_id, imageUrl];
+        await client.query(insertImageQuery, imageValues);
+      });
+  
+      // Wait for all image insertions to complete
+      await Promise.all(imageInsertPromises);
+  
+      // Commit the transaction
+      await client.query("COMMIT");
+  
+      res.status(201).json({
+        message: "Product and images uploaded successfully",
+        product_id,
+      });
+    } catch (error) {
+      // Roll back the transaction on error
+      await client.query("ROLLBACK");
+      res.status(500).json({ message: error.message });
+    } finally {
+      // Release the database connection
+      client.release();
+    }
   };
   
+ 
+
   const getProducts = (req, res) => {
     const { cat, limit = 10, offset = 0, id, priority } = req.query;
-  
+
+    // Base query for fetching products
     let query = `
-      SELECT 
-        products.id,
-        products.name,
-        products.product_desc,
-        products.price,
-        products.margin,
-        products.off_sale,
-        products.rating,
-        products.priority,
-        products.fabric_type,
-        products.colors,
-        products.size,
-        products.category_id,
-        categories.name AS category_name,
-        STRING_AGG(images.img_url, ',') AS images,
-        FLOOR(products.price + (products.price * products.margin / 100)) AS price_with_margin,
-        FLOOR((products.price + (products.price * products.margin / 100)) 
-            - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price
-      FROM products
-      LEFT JOIN images ON products.id = images.product_id
-      LEFT JOIN categories ON products.category_id = categories.id
+        SELECT 
+            products.id,
+            products.name,
+            products.product_desc,
+            products.price,
+            products.margin,
+            products.off_sale,
+            products.rating,
+            products.priority,
+            products.fabric_type,
+            products.colors,
+            products.size,
+            products.category_id,
+            categories.name AS category_name,
+            STRING_AGG(images.img_url, ',') AS images,
+            FLOOR(products.price + (products.price * products.margin / 100)) AS price_with_margin,
+            FLOOR((products.price + (products.price * products.margin / 100)) 
+                - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price
+        FROM products
+        LEFT JOIN images ON products.id = images.product_id
+        LEFT JOIN categories ON products.category_id = categories.id
     `;
-  
+
     let queryParams = [];
-  
-    // Add WHERE clause based on query parameters
+    let whereClauses = [];
+
+    // Add conditions based on query parameters
     if (id) {
-      query += " WHERE products.id = $1";  // Assuming 'id' is UUID or string
-      queryParams.push(id);
-    } else {
-      if (cat) {
-        // Explicitly cast 'cat' to integer, assuming 'category_id' is an integer
-        query += " WHERE products.category_id = $2::int"; 
-        queryParams.push(cat);
-      }
-  
-      if (priority) {
-        // Explicitly cast 'priority' to integer, assuming 'priority' is an integer
-        if (queryParams.length > 0) {
-          query += " AND products.priority = $3::int"; 
-        } else {
-          query += " WHERE products.priority = $3::int"; 
-        }
-        queryParams.push(priority);
-      }
+        whereClauses.push(`products.id = $${queryParams.length + 1}`);
+        queryParams.push(id);
     }
-  
+
+    if (cat) {
+        whereClauses.push(`products.category_id = $${queryParams.length + 1}`);
+        queryParams.push(cat);
+    }
+
+    if (priority) {
+        whereClauses.push(`products.priority = $${queryParams.length + 1}`);
+        queryParams.push(parseInt(priority));
+    }
+
+    // Append WHERE clause if conditions exist
+    if (whereClauses.length > 0) {
+        query += ` WHERE ${whereClauses.join(" AND ")}`;
+    }
+
+    // Group by necessary fields to use aggregate functions
     query += " GROUP BY products.id, categories.name";
-  
-    // Add pagination logic with proper SQL syntax for PostgreSQL
-    query += " LIMIT $4 OFFSET $5";
+
+    // Add LIMIT and OFFSET for pagination
+    query += ` LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
     queryParams.push(parseInt(limit), parseInt(offset));
-  
+
     // Execute the query
     connection.query(query, queryParams, (error, results) => {
-      if (error) {
-        return res.status(500).json({ message: "Error fetching products", error: error.message });
-      }
-  
-      if (results.rows.length === 0) {
-        return res.status(404).json({ message: `No ${id ? "product" : "products"} found` });
-      }
-  
-      const formattedResults = results.rows.map(product => {
-        const { images, price_with_margin, final_price, category_name, ...others } = product;
-        return {
-          ...others,
-          category_name,  // Include category name
-          images: images ? images.split(",") : [],
-          final_price,    // Price after margin and off_sale
-        };
-      });
-  
-      res.status(200).json({
-        message: id ? "Product fetched successfully" : "Products fetched successfully",
-        data: formattedResults,
-      });
+        if (error) {
+            return res.status(500).json({ message: "Error fetching products", error: error.message });
+        }
+
+        if (results.rows.length === 0) {
+            return res.status(404).json({ message: `No ${id ? "product" : "products"} found` });
+        }
+
+        // Format results
+        const formattedResults = results.rows.map(product => ({
+            ...product,
+            images: product.images ? product.images.split(",") : [], // Convert images string to array
+        }));
+
+        res.status(200).json({
+            message: id ? "Product fetched successfully" : "Products fetched successfully",
+            data: formattedResults,
+        });
     });
-  };
+};
+
+
+
+  
+
   
   
   
