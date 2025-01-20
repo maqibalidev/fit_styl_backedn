@@ -8,6 +8,7 @@ const chatRoute = require("./routes/chatRoutes");
 const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const bannerRoutes = require("./routes/bannerRoutes");
+const cartRoutes = require("./routes/cartRoutes");
 const { SaveMessage } = require("./controllers/socketController");
 require("./db/db_config");
 
@@ -52,7 +53,7 @@ app.use("/api/v1/product", productRoutes);
 app.use("/api/v1/chat", chatRoute);
 app.use("/api/v1/category", categoryRoutes);
 app.use("/api/v1/banner", bannerRoutes);
-
+app.use("/api/v1/cart", cartRoutes);
 // Socket.IO connection handling
 io.on("connection", (socket) => {
   console.log("User connected");

@@ -5,11 +5,11 @@ const storage = multer.memoryStorage();
 
 // File filter to allow only PNG images (can be extended for other types)
 const fileFilter = (req, file, cb) => {
-    const allowedMimeTypes = ["image/png"];
+    const allowedMimeTypes = ["image/png","image/jpg","image/jpeg"];
     if (allowedMimeTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error("Invalid file type! Only PNG files are allowed."), false);
+        cb(new Error("Invalid file type! Only PNG ,JPG ,JPEG files are allowed."), false);
     }
 };
 

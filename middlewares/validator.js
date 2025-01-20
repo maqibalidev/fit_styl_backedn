@@ -239,6 +239,22 @@ const bannerValidator = [
     .withMessage("Priority cannot be null"),
 ];
 
+
+const cartValidator = [
+  body("product_id")
+  .isString()
+  .withMessage("product_id must be a string")
+  .notEmpty()
+  .withMessage("product_id cannot be empty"),
+
+  body("quantity")
+  .isNumeric()
+  .withMessage("quantity must be a number")
+  .notEmpty()
+  .withMessage("quantity cannot be empty"),
+  
+];
+
 module.exports = {
   validateUser,
   loginValidation,
@@ -246,4 +262,5 @@ module.exports = {
   categoryValidator,
   bannerValidator,
   updateUserValidation,
+  cartValidator
 };
