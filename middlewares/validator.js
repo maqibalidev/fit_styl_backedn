@@ -171,8 +171,8 @@ const validateProduct = [
     .notEmpty()
     .withMessage("Margin cannot be null"),
   body("category_id")
-    .isInt()
-    .withMessage("category_id must be an integer")
+  .isString()
+  .withMessage("category_id must be a string")
     .notEmpty()
     .withMessage("Margin cannot be null"),
 
