@@ -154,10 +154,6 @@ cloudinary.config({
             return res.status(500).json({ message: "Error fetching products", error: error.message });
         }
 
-        if (results.rows.length === 0) {
-            return res.status(404).json({ message: `No ${id ? "product" : "products"} found` });
-        }
-
         // Format results
         const formattedResults = results.rows.map(product => ({
             ...product,
