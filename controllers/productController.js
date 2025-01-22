@@ -146,7 +146,7 @@ cloudinary.config({
 
     // Add LIMIT and OFFSET for pagination
     query += ` LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
-    queryParams.push(parseInt(limit), parseInt(offset));
+    queryParams.push(parseInt(limit), parseInt(offset*limit));
 
     // Execute the query
     connection.query(query, queryParams, (error, results) => {
