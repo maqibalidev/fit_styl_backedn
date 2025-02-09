@@ -383,7 +383,7 @@ const verifyUser = (req,res)=>{
     });
 
     // Step 3: Create the password reset link
-    const resetLink = `${process.env.FRONTEND_URL}verify?token=${resetToken}`;
+    const resetLink = `${process.env.FRONTEND_URL}/verify?token=${resetToken}`;
 
     // Step 4: Configure Nodemailer to send the email
     const transporter = nodemailer.createTransport({

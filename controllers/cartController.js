@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
   const AddCartItem = async (req, res) => {
     const cart_id = uuidv4();
     const userId = req.user.userId;
-    const {product_id,quantity=1} = req.body;
+    const {product_id,quantity=1,img_id=0,size="SM"} = req.body;
   
     // Get a connection to the database
     const client = await connection.connect();
@@ -37,11 +37,11 @@ const { v4: uuidv4 } = require('uuid');
       // Insert the product into the database
       const insertProductQuery = `
         INSERT INTO cart (
-          id, product_id, user_id, quantity, created_at)
-        VALUES ($1, $2, $3, $4, $5);
+          id, product_id, user_id, quantity,img_id,size, created_at)
+        VALUES ($1, $2, $3, $4, $5,$6,$7);
       `;
       const timestamp = Date.now();
-      const cartValues = [ cart_id, product_id, userId,quantity, timestamp];
+      const cartValues = [ cart_id, product_id, userId,quantity,img_id,size, timestamp];
 
       await client.query(insertProductQuery, cartValues);
   
@@ -64,7 +64,7 @@ const { v4: uuidv4 } = require('uuid');
     const { product_id, quantity = 1 } = req.body;
   
 
-    if (isNaN(quantity) || !product_id || !userId) {
+    if (isNaN(quantity)) {
       return res.status(400).json({ message: "Invalid input data" });
     }
   
@@ -181,7 +181,9 @@ const { v4: uuidv4 } = require('uuid');
     products.name,
     products.rating,
     images.img_url,
+    images.color,
     cart.quantity,
+       cart.size,
     products.off_sale,
     (products.price * products.margin / 100) AS price_with_margin,
     FLOOR(
@@ -190,7 +192,7 @@ const { v4: uuidv4 } = require('uuid');
     ) AS final_price
 FROM cart
 JOIN products ON cart.product_id = products.id
-LEFT JOIN images ON products.id = images.product_id
+LEFT JOIN images ON products.id = images.product_id AND images.id = cart.img_id
 WHERE cart.user_id = $1
 ORDER BY products.id;
       `;
@@ -210,4 +212,53 @@ ORDER BY products.id;
     }
   };
   
-  module.exports = {AddCartItem ,UpdateCartItem,removeProductFromCart,getCartProducts}
+
+  const clearCart = async (req, res) => {
+    const userId = req.user?.userId; 
+
+ 
+  
+    const client = await connection.connect();
+  
+    try {
+      // Start the transaction
+      await client.query("BEGIN");
+  
+      // Query to delete the product from the cart
+      const removeProductQuery = `
+        DELETE FROM cart
+        WHERE user_id = $1;
+      `;
+  
+      // Execute the query
+      const result = await client.query(removeProductQuery, [userId]);
+  
+      // If no rows were returned, the product was not found in the cart
+      if (result?.rowCount === 0) {
+        throw new Error("Product not found in the cart!");
+      }
+  
+      // Commit the transaction
+      await client.query("COMMIT");
+  
+      // Send a success response
+      res.status(200).json({
+        message: "Cart cleared!"
+      });
+  
+    } catch (error) {
+      // Rollback the transaction in case of an error
+      await client.query("ROLLBACK");
+  
+      // Log the error for debugging
+      console.error("Error clearing = cart:", error.message);
+  
+      // Send the error response
+      res.status(500).json({ message: "Failed to clear cart!" });
+    } finally {
+      // Release the client back to the pool
+      client.release();
+    }
+  };
+
+  module.exports = {AddCartItem ,UpdateCartItem,removeProductFromCart,getCartProducts,clearCart}

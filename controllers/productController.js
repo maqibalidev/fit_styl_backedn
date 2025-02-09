@@ -88,14 +88,13 @@ cloudinary.config({
   };
   
  
-
   const getProducts = (req, res) => {
     const { cat, limit = 10, offset = 0, id, priority } = req.query;
 
-    // Base query for fetching products
+    // Base query for fetching products and images
     let query = `
         SELECT 
-            products.id,
+            products.id AS product_id,
             products.name,
             products.product_desc,
             products.price,
@@ -108,10 +107,12 @@ cloudinary.config({
             products.size,
             products.category_id,
             categories.name AS category_name,
-            STRING_AGG(images.img_url, ',') AS images,
             FLOOR(products.price + (products.price * products.margin / 100)) AS price_with_margin,
             FLOOR((products.price + (products.price * products.margin / 100)) 
-                - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price
+                - ((products.price + (products.price * products.margin / 100)) * products.off_sale / 100)) AS final_price,
+            images.id AS image_id,
+            images.img_url,
+            images.color
         FROM products
         LEFT JOIN images ON products.id = images.product_id
         LEFT JOIN categories ON products.category_id = categories.id
@@ -120,7 +121,7 @@ cloudinary.config({
     let queryParams = [];
     let whereClauses = [];
 
-    // Add conditions based on query parameters
+    // Apply filters based on query parameters
     if (id) {
         whereClauses.push(`products.id = $${queryParams.length + 1}`);
         queryParams.push(id);
@@ -141,12 +142,9 @@ cloudinary.config({
         query += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
-    // Group by necessary fields to use aggregate functions
-    query += " GROUP BY products.id, categories.name";
-
-    // Add LIMIT and OFFSET for pagination
+    // Add pagination
     query += ` LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
-    queryParams.push(parseInt(limit), parseInt(offset*limit));
+    queryParams.push(parseInt(limit), parseInt(offset * limit));
 
     // Execute the query
     connection.query(query, queryParams, (error, results) => {
@@ -154,18 +152,49 @@ cloudinary.config({
             return res.status(500).json({ message: "Error fetching products", error: error.message });
         }
 
-        // Format results
-        const formattedResults = results.rows.map(product => ({
-            ...product,
-            images: product.images ? product.images.split(",") : [], // Convert images string to array
-        }));
+        // Group products and their images into a map
+        const productsMap = new Map();
 
+        results.rows.forEach(row => {
+            if (!productsMap.has(row.product_id)) {
+                // Initialize product if it's not in the map
+                productsMap.set(row.product_id, {
+                    id: row.product_id,
+                    name: row.name,
+                    product_desc: row.product_desc,
+                    price: row.price,
+                    margin: row.margin,
+                    off_sale: row.off_sale,
+                    rating: row.rating,
+                    priority: row.priority,
+                    fabric_type: row.fabric_type,
+                    colors: row.colors,
+                    size: row.size,
+                    category_id: row.category_id,
+                    category_name: row.category_name,
+                    price_with_margin: row.price_with_margin,
+                    final_price: row.final_price,
+                    images: [],
+                });
+            }
+
+            // Add image details to the product
+            productsMap.get(row.product_id).images.push({
+                id: row.image_id,
+                img_url: row.img_url,
+               color:row.color,
+            });
+        });
+
+        // Return the formatted products data
         res.status(200).json({
             message: id ? "Product fetched successfully" : "Products fetched successfully",
-            data: formattedResults,
+            data: Array.from(productsMap.values()), // Convert map to array
         });
     });
 };
+
+
 
 
 
